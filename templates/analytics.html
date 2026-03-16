@@ -1,0 +1,153 @@
+```html
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Weekly Analytics</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f4f6fb;
+padding:30px;
+}
+
+.container{
+max-width:1000px;
+margin:auto;
+}
+
+.box{
+background:white;
+padding:25px;
+margin-bottom:30px;
+border-radius:10px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);
+text-align:center;
+}
+
+.chart-container{
+max-width:600px;
+margin:auto;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Weekly Productivity Analytics</h2>
+
+<div class="box">
+
+<h3>Weekly Study Time</h3>
+
+<div class="chart-container">
+<canvas id="studyWeekChart"></canvas>
+</div>
+
+</div>
+
+
+<div class="box">
+
+<h3>Weekly Game Time</h3>
+
+<div class="chart-container">
+<canvas id="gameWeekChart"></canvas>
+</div>
+
+</div>
+
+
+<div class="box">
+
+<h3>Study vs Game This Week</h3>
+
+<div class="chart-container">
+<canvas id="ratioChart"></canvas>
+</div>
+
+</div>
+
+
+<br>
+
+<a href="/dashboard">Back to Dashboard</a>
+
+</div>
+
+
+<script>
+
+const weekDays = '{{week_days | tojson}};'
+const studyMinutes = '{{study_minutes | tojson}};'
+const gameMinutes = '{{game_minutes | tojson}};'
+
+
+/* Study chart */
+
+new Chart(document.getElementById("studyWeekChart"),{
+
+type:"bar",
+
+data:{
+labels:weekDays,
+datasets:[{
+label:"Study Minutes",
+data:studyMinutes,
+backgroundColor:"#4CAF50"
+}]
+}
+
+});
+
+
+/* Game chart */
+
+new Chart(document.getElementById("gameWeekChart"),{
+
+type:"bar",
+
+data:{
+labels:weekDays,
+datasets:[{
+label:"Game Minutes",
+data:gameMinutes,
+backgroundColor:"#ff6384"
+}]
+}
+
+});
+
+
+/* Ratio chart */
+
+let totalStudy = studyMinutes.reduce((a,b)=>a+b,0);
+let totalGame = gameMinutes.reduce((a,b)=>a+b,0);
+
+new Chart(document.getElementById("ratioChart"),{
+
+type:"pie",
+
+data:{
+labels:["Study","Game"],
+datasets:[{
+data:[totalStudy,totalGame],
+backgroundColor:["#4CAF50","#ff6384"]
+}]
+}
+
+});
+
+</script>
+
+</body>
+</html>
+```

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Leaderboard - Study Tracker</title>
+    <style>
+        body{font-family:Arial;background:#f4f6fb;padding:30px;}
+        table{width:50%;margin:auto;border-collapse:collapse;background:white;}
+        th,td{padding:10px;border-bottom:1px solid #ddd;text-align:center;}
+        th{background:#4CAF50;color:white;}
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center;">Leaderboard</h2>
+    <table>
+        <tr><th>Rank</th><th>Username</th><th>Total Study Minutes</th></tr>
+        {% for user in leaderboard %}
+        <tr>
+            <td>{{ loop.index }}</td>  <!-- use loop.index instead of enumerate -->
+            <td>{{ user['username'] }}</td>
+            <td>{{ user['total_minutes'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br><a href="/dashboard" style="display:block;text-align:center;">Back to Dashboard</a>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Profile - Study Tracker</title>
+    <style>
+        body{font-family:Arial;background:#f4f6fb;padding:30px;}
+        .container{max-width:800px;margin:auto;background:white;padding:30px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+        .badges{display:flex;gap:10px;margin-top:10px;}
+        .badge{background:#FFD700;padding:5px 10px;border-radius:5px;font-weight:bold;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Profile: {{ username }}</h2>
+    <p>Level: {{ level }}</p>
+    <p>XP: {{ xp }}</p>
+    <p>Total Study Minutes: {{ total_minutes }}</p>
+    <p>Total Sessions: {{ session_count }}</p>
+    <h3>Badges:</h3>
+    <div class="badges">
+        {% for badge in badges %}
+            <div class="badge">{{ badge['badge'] }}</div>
+        {% endfor %}
+    </div>
+    <br>
+    <a href="/dashboard">Back to Dashboard</a>
+</div>
+</body>
+</html>
