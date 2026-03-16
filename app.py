@@ -3,22 +3,52 @@ import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = "secretkey"
+app.secret_key = "studytrackersecret"
 
-DB = "database.db"
+DATABASE = "database.db"
 
 
 def get_db():
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-# ---------------- HOME ----------------
+# ---------------- HOME PAGE ----------------
 
 @app.route("/")
 def home():
     return render_template("home.html")
+
+
+# ---------------- REGISTER ----------------
+
+@app.route("/register", methods=["POST"])
+def register():
+
+    username = request.form["username"]
+    password = request.form["password"]
+
+    conn = get_db()
+
+    existing = conn.execute(
+        "SELECT * FROM users WHERE username=?",
+        (username,)
+    ).fetchone()
+
+    if existing:
+        conn.close()
+        return "Username already exists"
+
+    conn.execute(
+        "INSERT INTO users(username,password,xp,level) VALUES(?,?,0,1)",
+        (username, password)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/")
 
 
 # ---------------- LOGIN ----------------
@@ -49,55 +79,9 @@ def login():
 
 @app.route("/logout")
 def logout():
+
     session.clear()
     return redirect("/")
-
-
-# ---------------- BADGE CHECKER ----------------
-
-def check_badges(username):
-
-    conn = get_db()
-
-    sessions = conn.execute(
-        "SELECT COUNT(*) as count FROM sessions WHERE username=?",
-        (username,)
-    ).fetchone()["count"]
-
-    user = conn.execute(
-        "SELECT level FROM users WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    level = user["level"]
-
-    badges = conn.execute(
-        "SELECT badge_name FROM badges WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    badge_names = [b["badge_name"] for b in badges]
-
-    if sessions >= 5 and "5 Sessions" not in badge_names:
-        conn.execute(
-            "INSERT INTO badges(username,badge_name) VALUES(?,?)",
-            (username,"5 Sessions")
-        )
-
-    if sessions >= 10 and "10 Sessions" not in badge_names:
-        conn.execute(
-            "INSERT INTO badges(username,badge_name) VALUES(?,?)",
-            (username,"10 Sessions")
-        )
-
-    if level >= 5 and "Level 5 Achiever" not in badge_names:
-        conn.execute(
-            "INSERT INTO badges(username,badge_name) VALUES(?,?)",
-            (username,"Level 5 Achiever")
-        )
-
-    conn.commit()
-    conn.close()
 
 
 # ---------------- DASHBOARD ----------------
@@ -110,28 +94,18 @@ def dashboard():
 
     username = session["username"]
 
-    check_badges(username)
-
     conn = get_db()
 
-    user = conn.execute(
-        "SELECT xp, level FROM users WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    xp = user["xp"]
-    level = user["level"]
-
-    rows = conn.execute(
+    study_rows = conn.execute(
         "SELECT date, minutes FROM sessions WHERE username=?",
         (username,)
     ).fetchall()
 
-    dates = [r["date"] for r in rows]
-    minutes = [r["minutes"] for r in rows]
+    dates = [r["date"] for r in study_rows]
+    minutes = [r["minutes"] for r in study_rows]
 
-    total = sum(minutes) if minutes else 0
-    sessions = len(minutes)
+    total_study = sum(minutes) if minutes else 0
+    sessions_count = len(minutes)
 
     streak = len(set(dates))
 
@@ -142,34 +116,35 @@ def dashboard():
 
     game_total = sum([r["minutes"] for r in game_rows]) if game_rows else 0
 
-    study_total = total
-
-    if study_total < game_total:
-        coach_message = "⚠ You played more than you studied."
-    elif sessions >= 3:
-        coach_message = "🔥 Excellent study consistency!"
-    else:
-        coach_message = "👍 Keep going."
+    user = conn.execute(
+        "SELECT xp,level FROM users WHERE username=?",
+        (username,)
+    ).fetchone()
 
     conn.close()
+
+    coach = "Keep studying consistently!"
+
+    if game_total > total_study:
+        coach = "⚠ Try reducing game time and focus on studying."
 
     return render_template(
         "dashboard.html",
         username=username,
-        total=total,
-        sessions=sessions,
+        total=total_study,
+        sessions=sessions_count,
         streak=streak,
         dates=dates,
         minutes=minutes,
-        study_total=study_total,
+        study_total=total_study,
         game_total=game_total,
-        xp=xp,
-        level=level,
-        coach_message=coach_message
+        xp=user["xp"],
+        level=user["level"],
+        coach_message=coach
     )
 
 
-# ---------------- STUDY TIMER SAVE ----------------
+# ---------------- AUTO STUDY SESSION ----------------
 
 @app.route("/auto_session")
 def auto_session():
@@ -184,8 +159,8 @@ def auto_session():
     conn = get_db()
 
     conn.execute(
-        "INSERT INTO sessions(username,date,minutes) VALUES(?,?,?)",
-        (username, today, 25)
+        "INSERT INTO sessions(username,date,minutes) VALUES(?,?,25)",
+        (username, today)
     )
 
     conn.execute(
@@ -225,121 +200,7 @@ def add_game():
     return redirect("/dashboard")
 
 
-# ---------------- LEADERBOARD ----------------
-
-@app.route("/leaderboard")
-def leaderboard():
-
-    conn = get_db()
-
-    rows = conn.execute(
-        """
-        SELECT username,
-        SUM(minutes) as total_minutes
-        FROM sessions
-        GROUP BY username
-        ORDER BY total_minutes DESC
-        """
-    ).fetchall()
-
-    conn.close()
-
-    return render_template("leaderboard.html", leaderboard=rows)
-
-
-# ---------------- PROFILE ----------------
-
-@app.route("/profile")
-def profile():
-
-    if "username" not in session:
-        return redirect("/")
-
-    username = session["username"]
-
-    conn = get_db()
-
-    user = conn.execute(
-        "SELECT xp, level FROM users WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    conn.close()
-
-    return render_template(
-        "profile.html",
-        username=username,
-        xp=user["xp"],
-        level=user["level"]
-    )
-
-
-# ---------------- BADGES PAGE ----------------
-
-@app.route("/badges")
-def badges():
-
-    if "username" not in session:
-        return redirect("/")
-
-    username = session["username"]
-
-    conn = get_db()
-
-    rows = conn.execute(
-        "SELECT badge_name FROM badges WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    conn.close()
-
-    return render_template("badges.html", badges=rows)
-
-
-# ---------------- ANALYTICS ----------------
-
-@app.route("/analytics")
-def analytics():
-
-    if "username" not in session:
-        return redirect("/")
-
-    username = session["username"]
-
-    conn = get_db()
-
-    study_rows = conn.execute(
-        "SELECT date, minutes FROM sessions WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    game_rows = conn.execute(
-        "SELECT date, minutes FROM game_sessions WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    week_days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-
-    study_minutes = [0,0,0,0,0,0,0]
-    game_minutes = [0,0,0,0,0,0,0]
-
-    for row in study_rows:
-        day = datetime.strptime(row["date"], "%Y-%m-%d").weekday()
-        study_minutes[day] += row["minutes"]
-
-    for row in game_rows:
-        day = datetime.strptime(row["date"], "%Y-%m-%d").weekday()
-        game_minutes[day] += row["minutes"]
-
-    conn.close()
-
-    return render_template(
-        "analytics.html",
-        week_days=week_days,
-        study_minutes=study_minutes,
-        game_minutes=game_minutes
-    )
-
+# ---------------- RUN SERVER ----------------
 
 if __name__ == "__main__":
     app.run()
