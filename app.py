@@ -5,12 +5,15 @@ import os
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
+
 # ---------- DATABASE ---------- #
 
 def get_db():
-    conn = sqlite3.connect("database.db")
+    db_path = os.path.join(os.getcwd(), "database.db")  # ✅ Render-safe path
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def create_table():
     conn = get_db()
@@ -23,7 +26,10 @@ def create_table():
     conn.commit()
     conn.close()
 
-create_table()
+
+@app.before_first_request
+def init_db():
+    create_table()
 
 
 # ---------- AUTH ---------- #
@@ -101,7 +107,7 @@ def dashboard():
     if not user:
         return redirect('/login')
 
-    # SAFE DATA (NO CRASH)
+    # SAFE DATA
     dates = ["Mon","Tue","Wed","Thu","Fri"]
     minutes = [30,45,20,60,50]
 
@@ -134,11 +140,10 @@ def dashboard():
 
 @app.route('/add_game', methods=['POST'])
 def add_game():
-    # You can store this later in DB
     return redirect('/dashboard')
 
 
-# ---------- AUTO SESSION (FIX FOR LOADING ISSUE) ---------- #
+# ---------- AUTO SESSION (FIXED) ---------- #
 
 @app.route('/auto_session')
 def auto_session():
@@ -175,6 +180,13 @@ def leaderboard():
     ).fetchall()
     conn.close()
 
+    users = [dict(u) for u in users]
+
+    # ✅ Fix NULL scores
+    for u in users:
+        if u['score'] is None:
+            u['score'] = 0
+
     return render_template('leaderboard.html', users=users)
 
 
@@ -190,9 +202,22 @@ def analytics():
     conn.close()
 
     total = len(users)
-    avg = sum([u['score'] for u in users]) / total if total > 0 else 0
 
-    return render_template('analytics.html', total=total, avg=round(avg,2))
+    # ✅ Safe score handling
+    scores = []
+    for u in users:
+        if u['score'] is None:
+            scores.append(0)
+        else:
+            scores.append(u['score'])
+
+    avg = sum(scores) / total if total > 0 else 0
+
+    return render_template(
+        'analytics.html',
+        total=total,
+        avg=round(avg, 2)
+    )
 
 
 # ---------- BADGES ---------- #
@@ -209,7 +234,7 @@ def badges():
     ).fetchone()
     conn.close()
 
-    score = user['score']
+    score = user['score'] if user['score'] else 0
 
     if score >= 50:
         badge = "🏆 Pro"
@@ -221,7 +246,14 @@ def badges():
     return render_template('badges.html', badge=badge)
 
 
-# ---------- RUN (RENDER READY) ---------- #
+# ---------- TEST ROUTE ---------- #
+
+@app.route('/test')
+def test():
+    return "Server is working ✅"
+
+
+# ---------- RUN ---------- #
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
