@@ -9,7 +9,7 @@ app.secret_key = "supersecretkey"
 # ---------- DATABASE ---------- #
 
 def get_db():
-    db_path = os.path.join(os.getcwd(), "database.db")  # ✅ Render-safe path
+    db_path = os.path.join(os.getcwd(), "database.db")
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -27,8 +27,20 @@ def create_table():
     conn.close()
 
 
+# ✅ FIX OLD DATABASE (VERY IMPORTANT)
+def fix_db():
+    conn = get_db()
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN score INTEGER DEFAULT 0")
+        conn.commit()
+    except:
+        pass
+    conn.close()
 
-    create_table()
+
+# ✅ CALL BOTH ON START
+create_table()
+fix_db()
 
 
 # ---------- AUTH ---------- #
@@ -106,7 +118,6 @@ def dashboard():
     if not user:
         return redirect('/login')
 
-    # SAFE DATA
     dates = ["Mon","Tue","Wed","Thu","Fri"]
     minutes = [30,45,20,60,50]
 
@@ -142,7 +153,7 @@ def add_game():
     return redirect('/dashboard')
 
 
-# ---------- AUTO SESSION (FIXED) ---------- #
+# ---------- AUTO SESSION ---------- #
 
 @app.route('/auto_session')
 def auto_session():
@@ -181,9 +192,9 @@ def leaderboard():
 
     users = [dict(u) for u in users]
 
-    # ✅ Fix NULL scores
+    # ✅ SAFE SCORE FIX
     for u in users:
-        if u['score'] is None:
+        if 'score' not in u or u['score'] is None:
             u['score'] = 0
 
     return render_template('leaderboard.html', users=users)
@@ -202,13 +213,12 @@ def analytics():
 
     total = len(users)
 
-    # ✅ Safe score handling
     scores = []
     for u in users:
-        if u['score'] is None:
-            scores.append(0)
-        else:
+        try:
             scores.append(u['score'])
+        except:
+            scores.append(0)
 
     avg = sum(scores) / total if total > 0 else 0
 
@@ -233,7 +243,10 @@ def badges():
     ).fetchone()
     conn.close()
 
-    score = user['score'] if user['score'] else 0
+    try:
+        score = user['score']
+    except:
+        score = 0
 
     if score >= 50:
         badge = "🏆 Pro"
