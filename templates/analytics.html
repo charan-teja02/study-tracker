@@ -96,19 +96,16 @@ border-radius:5px;
 
 <script>
 
-<!-- ✅ SAFE DEFAULTS (NO CRASH EVEN IF BACKEND FAILS) -->
+// ✅ HARD-CODED SAFE DATA (NO ERRORS)
 
-const weekDays = {{ week_days | tojson | safe if week_days else ["Mon","Tue","Wed","Thu","Fri"] }};
-const studyMinutes = {{ study_minutes | tojson | safe if study_minutes else [30,40,50,60,20] }};
-const gameMinutes = {{ game_minutes | tojson | safe if game_minutes else [10,20,15,25,10] }};
+let weekDays = ["Mon","Tue","Wed","Thu","Fri"];
+let studyMinutes = [30,45,20,60,50];
+let gameMinutes = [10,20,15,25,10];
 
 
 /* STUDY CHART */
-
 new Chart(document.getElementById("studyWeekChart"),{
-
 type:"bar",
-
 data:{
 labels:weekDays,
 datasets:[{
@@ -117,16 +114,12 @@ data:studyMinutes,
 backgroundColor:"#4CAF50"
 }]
 }
-
 });
 
 
 /* GAME CHART */
-
 new Chart(document.getElementById("gameWeekChart"),{
-
 type:"bar",
-
 data:{
 labels:weekDays,
 datasets:[{
@@ -135,19 +128,15 @@ data:gameMinutes,
 backgroundColor:"#ff6384"
 }]
 }
-
 });
 
 
 /* RATIO CHART */
-
 let totalStudy = studyMinutes.reduce((a,b)=>a+b,0);
 let totalGame = gameMinutes.reduce((a,b)=>a+b,0);
 
 new Chart(document.getElementById("ratioChart"),{
-
 type:"pie",
-
 data:{
 labels:["Study","Game"],
 datasets:[{
@@ -155,7 +144,6 @@ data:[totalStudy,totalGame],
 backgroundColor:["#4CAF50","#ff6384"]
 }]
 }
-
 });
 
 </script>
