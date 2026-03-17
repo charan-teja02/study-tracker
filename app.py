@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
-# ---------------- DATABASE ---------------- #
+# ---------- DATABASE ---------- #
 
 def get_db():
     conn = sqlite3.connect("database.db")
@@ -15,17 +15,17 @@ def get_db():
 def create_table():
     conn = get_db()
     conn.execute('''CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT UNIQUE,
-                        password TEXT,
-                        score INTEGER DEFAULT 0
-                    )''')
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        score INTEGER DEFAULT 0
+    )''')
     conn.commit()
     conn.close()
 
 create_table()
 
-# ---------------- AUTH ---------------- #
+# ---------- AUTH ---------- #
 
 @app.route('/')
 def home():
@@ -34,17 +34,17 @@ def home():
     return redirect('/login')
 
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        u = request.form['username']
+        p = request.form['password']
 
         conn = get_db()
         try:
-            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.execute("INSERT INTO users (username,password) VALUES (?,?)",(u,p))
             conn.commit()
-            flash("Account created! Please login.")
+            flash("Account created!")
             return redirect('/login')
         except:
             flash("Username already exists!")
@@ -55,22 +55,24 @@ def register():
     return render_template('register.html')
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET','POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        u = request.form['username']
+        p = request.form['password']
 
         conn = get_db()
-        user = conn.execute("SELECT * FROM users WHERE username=? AND password=?", 
-                            (username, password)).fetchone()
+        user = conn.execute(
+            "SELECT * FROM users WHERE username=? AND password=?",
+            (u,p)
+        ).fetchone()
         conn.close()
 
         if user:
-            session['user'] = username
+            session['user'] = u
             return redirect('/dashboard')
         else:
-            flash("Invalid username or password")
+            flash("Invalid credentials")
 
     return render_template('login.html')
 
@@ -81,19 +83,40 @@ def logout():
     return redirect('/login')
 
 
-# ---------------- HELPER ---------------- #
+# ---------- HELPER ---------- #
 
 def check_login():
     return 'user' in session
 
 
-# ---------------- PAGES ---------------- #
+# ---------- DASHBOARD ---------- #
 
 @app.route('/dashboard')
 def dashboard():
-    if not check_login():
+    user = session.get('user')
+    if not user:
         return redirect('/login')
-    return render_template('dashboard.html', user=session['user'])
+
+    # 🔥 SAFE ANALYTICS DATA
+    dates = ["Mon","Tue","Wed","Thu","Fri"]
+    minutes = [30,45,20,60,50]
+
+    study_total = sum(minutes)
+    game_total = 20
+
+    xp = study_total * 2
+    level = xp // 50
+
+    return render_template(
+        "dashboard.html",
+        user=user,
+        dates=dates,
+        minutes=minutes,
+        study_total=study_total,
+        game_total=game_total,
+        xp=xp,
+        level=level
+    )
 
 
 @app.route('/profile')
@@ -102,11 +125,27 @@ def profile():
         return redirect('/login')
 
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", 
-                        (session['user'],)).fetchone()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username=?",
+        (session['user'],)
+    ).fetchone()
     conn.close()
 
     return render_template('profile.html', user=user)
+
+
+@app.route('/leaderboard')
+def leaderboard():
+    if not check_login():
+        return redirect('/login')
+
+    conn = get_db()
+    users = conn.execute(
+        "SELECT * FROM users ORDER BY score DESC"
+    ).fetchall()
+    conn.close()
+
+    return render_template('leaderboard.html', users=users)
 
 
 @app.route('/analytics')
@@ -119,21 +158,9 @@ def analytics():
     conn.close()
 
     total = len(users)
-    avg = sum([u['score'] for u in users]) / total if total > 0 else 0
+    avg = sum([u['score'] for u in users]) / total if total>0 else 0
 
-    return render_template('analytics.html', total=total, avg=round(avg, 2))
-
-
-@app.route('/leaderboard')
-def leaderboard():
-    if not check_login():
-        return redirect('/login')
-
-    conn = get_db()
-    users = conn.execute("SELECT * FROM users ORDER BY score DESC").fetchall()
-    conn.close()
-
-    return render_template('leaderboard.html', users=users)
+    return render_template('analytics.html', total=total, avg=round(avg,2))
 
 
 @app.route('/badges')
@@ -142,8 +169,10 @@ def badges():
         return redirect('/login')
 
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", 
-                        (session['user'],)).fetchone()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username=?",
+        (session['user'],)
+    ).fetchone()
     conn.close()
 
     score = user['score']
@@ -158,7 +187,7 @@ def badges():
     return render_template('badges.html', badge=badge)
 
 
-# ---------------- RUN ---------------- #
+# ---------- RUN ---------- #
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
