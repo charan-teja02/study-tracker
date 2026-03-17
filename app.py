@@ -1,206 +1,165 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, flash
 import sqlite3
-from datetime import datetime
+import os
 
 app = Flask(__name__)
-app.secret_key = "studytrackersecret"
+app.secret_key = "supersecretkey"
 
-DATABASE = "database.db"
-
+# ---------------- DATABASE ---------------- #
 
 def get_db():
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect("database.db")
     conn.row_factory = sqlite3.Row
     return conn
 
+def create_table():
+    conn = get_db()
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT UNIQUE,
+                        password TEXT,
+                        score INTEGER DEFAULT 0
+                    )''')
+    conn.commit()
+    conn.close()
 
-# ---------------- HOME PAGE ----------------
+create_table()
 
-@app.route("/")
+# ---------------- AUTH ---------------- #
+
+@app.route('/')
 def home():
-    return render_template("home.html")
+    if 'user' in session:
+        return redirect('/dashboard')
+    return redirect('/login')
 
 
-# ---------------- REGISTER ----------------
-
-@app.route("/register", methods=["POST"])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
 
-    username = request.form["username"]
-    password = request.form["password"]
+        conn = get_db()
+        try:
+            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.commit()
+            flash("Account created! Please login.")
+            return redirect('/login')
+        except:
+            flash("Username already exists!")
+            return redirect('/register')
+        finally:
+            conn.close()
 
-    conn = get_db()
-
-    existing = conn.execute(
-        "SELECT * FROM users WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    if existing:
-        conn.close()
-        return "Username already exists"
-
-    conn.execute(
-        "INSERT INTO users(username,password,xp,level) VALUES(?,?,0,1)",
-        (username, password)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/")
+    return render_template('register.html')
 
 
-# ---------------- LOGIN ----------------
-
-@app.route("/login", methods=["POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
 
-    username = request.form["username"]
-    password = request.form["password"]
+        conn = get_db()
+        user = conn.execute("SELECT * FROM users WHERE username=? AND password=?", 
+                            (username, password)).fetchone()
+        conn.close()
 
-    conn = get_db()
+        if user:
+            session['user'] = username
+            return redirect('/dashboard')
+        else:
+            flash("Invalid username or password")
 
-    user = conn.execute(
-        "SELECT * FROM users WHERE username=? AND password=?",
-        (username, password)
-    ).fetchone()
-
-    conn.close()
-
-    if user:
-        session["username"] = username
-        return redirect("/dashboard")
-
-    return "Invalid Login"
+    return render_template('login.html')
 
 
-# ---------------- LOGOUT ----------------
-
-@app.route("/logout")
+@app.route('/logout')
 def logout():
-
     session.clear()
-    return redirect("/")
+    return redirect('/login')
 
 
-# ---------------- DASHBOARD ----------------
+# ---------------- HELPER ---------------- #
 
-@app.route("/dashboard")
+def check_login():
+    return 'user' in session
+
+
+# ---------------- PAGES ---------------- #
+
+@app.route('/dashboard')
 def dashboard():
-
-    if "username" not in session:
-        return redirect("/")
-
-    username = session["username"]
-
-    conn = get_db()
-
-    study_rows = conn.execute(
-        "SELECT date, minutes FROM sessions WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    dates = [r["date"] for r in study_rows]
-    minutes = [r["minutes"] for r in study_rows]
-
-    total_study = sum(minutes) if minutes else 0
-    sessions_count = len(minutes)
-
-    streak = len(set(dates))
-
-    game_rows = conn.execute(
-        "SELECT minutes FROM game_sessions WHERE username=?",
-        (username,)
-    ).fetchall()
-
-    game_total = sum([r["minutes"] for r in game_rows]) if game_rows else 0
-
-    user = conn.execute(
-        "SELECT xp,level FROM users WHERE username=?",
-        (username,)
-    ).fetchone()
-
-    conn.close()
-
-    coach = "Keep studying consistently!"
-
-    if game_total > total_study:
-        coach = "⚠ Try reducing game time and focus on studying."
-
-    return render_template(
-        "dashboard.html",
-        username=username,
-        total=total_study,
-        sessions=sessions_count,
-        streak=streak,
-        dates=dates,
-        minutes=minutes,
-        study_total=total_study,
-        game_total=game_total,
-        xp=user["xp"],
-        level=user["level"],
-        coach_message=coach
-    )
+    if not check_login():
+        return redirect('/login')
+    return render_template('dashboard.html', user=session['user'])
 
 
-# ---------------- AUTO STUDY SESSION ----------------
-
-@app.route("/auto_session")
-def auto_session():
-
-    if "username" not in session:
-        return ""
-
-    username = session["username"]
-
-    today = datetime.now().strftime("%Y-%m-%d")
+@app.route('/profile')
+def profile():
+    if not check_login():
+        return redirect('/login')
 
     conn = get_db()
-
-    conn.execute(
-        "INSERT INTO sessions(username,date,minutes) VALUES(?,?,25)",
-        (username, today)
-    )
-
-    conn.execute(
-        "UPDATE users SET xp = xp + 20 WHERE username=?",
-        (username,)
-    )
-
-    conn.commit()
+    user = conn.execute("SELECT * FROM users WHERE username=?", 
+                        (session['user'],)).fetchone()
     conn.close()
 
-    return "ok"
+    return render_template('profile.html', user=user)
 
 
-# ---------------- ADD GAME TIME ----------------
-
-@app.route("/add_game", methods=["POST"])
-def add_game():
-
-    if "username" not in session:
-        return redirect("/")
-
-    username = session["username"]
-    minutes = request.form["minutes"]
-
-    today = datetime.now().strftime("%Y-%m-%d")
+@app.route('/analytics')
+def analytics():
+    if not check_login():
+        return redirect('/login')
 
     conn = get_db()
-
-    conn.execute(
-        "INSERT INTO game_sessions(username,date,minutes) VALUES(?,?,?)",
-        (username, today, minutes)
-    )
-
-    conn.commit()
+    users = conn.execute("SELECT * FROM users").fetchall()
     conn.close()
 
-    return redirect("/dashboard")
+    total = len(users)
+    avg = sum([u['score'] for u in users]) / total if total > 0 else 0
+
+    return render_template('analytics.html', total=total, avg=round(avg, 2))
 
 
-# ---------------- RUN SERVER ----------------
+@app.route('/leaderboard')
+def leaderboard():
+    if not check_login():
+        return redirect('/login')
+
+    conn = get_db()
+    users = conn.execute("SELECT * FROM users ORDER BY score DESC").fetchall()
+    conn.close()
+
+    return render_template('leaderboard.html', users=users)
+
+
+@app.route('/badges')
+def badges():
+    if not check_login():
+        return redirect('/login')
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE username=?", 
+                        (session['user'],)).fetchone()
+    conn.close()
+
+    score = user['score']
+
+    if score >= 50:
+        badge = "🏆 Pro"
+    elif score >= 20:
+        badge = "⭐ Intermediate"
+    else:
+        badge = "🔥 Beginner"
+
+    return render_template('badges.html', badge=badge)
+
+
+# ---------------- RUN ---------------- #
 
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
