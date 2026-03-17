@@ -27,8 +27,7 @@ def create_table():
     conn.close()
 
 
-@app.before_first_request
-def init_db():
+
     create_table()
 
 
